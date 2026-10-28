@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculator</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #f8fafc;
+      background: #0b1220;
+    }
+
+    .calculator {
+      width: min(100%, 370px);
+      padding: 22px;
+      border: 1px solid #263244;
+      border-radius: 28px;
+      background: #111b2b;
+      box-shadow: 0 24px 70px #0008;
+    }
+
+    .brand {
+      margin: 0 0 12px;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+    }
+
+    .screen {
+      min-height: 115px;
+      padding: 12px 4px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: flex-end;
+      overflow: hidden;
+    }
+
+    .history {
+      min-height: 24px;
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+
+    .display {
+      max-width: 100%;
+      overflow-x: auto;
+      color: #f8fafc;
+      font-size: clamp(2.5rem, 12vw, 3.6rem);
+      font-weight: 300;
+      line-height: 1.1;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    button {
+      height: 64px;
+      border: 0;
+      border-radius: 20px;
+      color: #f8fafc;
+      background: #263449;
+      font: inherit;
+      font-size: 1.3rem;
+      cursor: pointer;
+      transition: filter 120ms ease, transform 120ms ease;
+    }
+
+    button:hover {
+      filter: brightness(1.15);
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    button:focus-visible {
+      outline: 3px solid #93c5fd;
+      outline-offset: 2px;
+    }
+
+    .function {
+      color: #e2e8f0;
+      background: #3b4a60;
+    }
+
+    .operator {
+      color: #1c1917;
+      background: #fbbf24;
+    }
+
+    .equals {
+      color: #052e2b;
+      background: #34d399;
+    }
+
+    .zero {
+      grid-column: span 2;
+    }
+
+    .hint {
+      margin: 16px 0 0;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-align: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="calculator" aria-label="Calculator">
+    <p class="brand">CALCULATOR</p>
+
+    <section class="screen" aria-label="Calculator display">
+      <div class="history" id="history" aria-hidden="true"></div>
+      <div class="display" id="display" role="status" aria-live="polite">0</div>
+    </section>
+
+    <section class="keys" aria-label="Calculator keys">
+      <button type="button" class="function" data-action="clear">AC</button>
+      <button type="button" class="function" data-action="delete" aria-label="Delete last digit">DEL</button>
+      <button type="button" class="function" data-action="percent">%</button>
+      <button type="button" class="operator" data-operator="/" aria-label="Divide">÷</button>
+
+      <button type="button" data-number="7">7</button>
+      <button type="button" data-number="8">8</button>
+      <button type="button" data-number="9">9</button>
+      <button type="button" class="operator" data-operator="*" aria-label="Multiply">×</button>
+
+      <button type="button" data-number="4">4</button>
+      <button type="button" data-number="5">5</button>
+      <button type="button" data-number="6">6</button>
+      <button type="button" class="operator" data-operator="-" aria-label="Subtract">−</button>
+
+      <button type="button" data-number="1">1</button>
+      <button type="button" data-number="2">2</button>
+      <button type="button" data-number="3">3</button>
+      <button type="button" class="operator" data-operator="+" aria-label="Add">+</button>
+
+      <button type="button" class="function" data-action="sign" aria-label="Change sign">±</button>
+      <button type="button" class="zero" data-number="0">0</button>
+      <button type="button" data-action="decimal">.</button>
+      <button type="button" class="equals" data-action="equals">=</button>
+    </section>
+
+    <p class="hint">Keyboard: numbers, + − × ÷, Enter, Backspace, Esc</p>
+  </main>
+
+  <script>
+    const displayElement = document.getElementById("display");
+    const historyElement = document.getElementById("history");
+    const keysElement = document.querySelector(".keys");
+
+    let displayValue = "0";
+    let firstOperand = null;
+    let operator = null;
+    let waitingForSecondOperand = false;
+
+    const operatorSymbols = {
+      "+": "+",
+      "-": "−",
+      "*": "×",
+      "/": "÷"
+    };
+
+    function formatNumber(value) {
+      if (!Number.isFinite(value)) return "Error";
+      return String(Number(value.toPrecision(12)));
+    }
+
+    function updateDisplay() {
+      displayElement.textContent = displayValue;
+
+      historyElement.textContent =
+        operator !== null && firstOperand !== null
+          ? `${formatNumber(firstOperand)} ${operatorSymbols[operator]}`
+          : "";
+    }
+
+    function resetIfError() {
+      if (displayValue === "Error") {
+        displayValue = "0";
+        firstOperand = null;
+        operator = null;
+        waitingForSecondOperand = false;
+      }
+    }
+
+    function inputDigit(digit) {
+      resetIfError();
+
+      if (waitingForSecondOperand) {
+        displayValue = displayValue === "-0" ? `-${digit}` : digit;
+        waitingForSecondOperand = false;
+      } else if (displayValue === "0") {
+        displayValue = digit;
+      } else if (displayValue === "-0") {
+        displayValue = `-${digit}`;
+      } else if (displayValue.length < 16) {
+        displayValue += digit;
+      }
+
+      updateDisplay();
+    }
+
+    function inputDecimal() {
+      resetIfError();
+
+      if (waitingForSecondOperand) {
+        displayValue = "0.";
+        waitingForSecondOperand = false;
+      } else if (!displayValue.includes(".")) {
+        displayValue += ".";
+      }
+
+      updateDisplay();
+    }
+
+    function calculate(a, b, selectedOperator) {
+      switch (selectedOperator) {
+        case "+": return a + b;
+        case "-": return a - b;
+        case "*": return a * b;
+        case "/": return b === 0 ? NaN : a / b;
+        default: return NaN;
+      }
+    }
+
+    function showError() {
+      displayValue = "Error";
+      firstOperand = null;
+      operator = null;
+      waitingForSecondOperand = true;
+      updateDisplay();
+    }
+
+    function chooseOperator(nextOperator) {
+      resetIfError();
+
+      const inputValue = Number(displayValue);
+
+      if (operator !== null && !waitingForSecondOperand) {
+        const result = calculate(firstOperand, inputValue, operator);
+
+        if (!Number.isFinite(result)) {
+          showError();
+          return;
+        }
+
+        displayValue = formatNumber(result);
+        firstOperand = Number(displayValue);
+      } else {
+        firstOperand = inputValue;
+      }
+
+      operator = nextOperator;
+      waitingForSecondOperand = true;
+      updateDisplay();
+    }
+
+    function handleEquals() {
+      if (operator === null || waitingForSecondOperand) return;
+
+      const result = calculate(
+        firstOperand,
+        Number(displayValue),
+        operator
+      );
+
+      if (!Number.isFinite(result)) {
+        showError();
+        return;
+      }
+
+      displayValue = formatNumber(result);
+      firstOperand = null;
+      operator = null;
+      waitingForSecondOperand = true;
+      updateDisplay();
+    }
+
+    function clearCalculator() {
+      displayValue = "0";
+      firstOperand = null;
+      operator = null;
+      waitingForSecondOperand = false;
+      updateDisplay();
+    }
+
+    function deleteLastDigit() {
+      resetIfError();
+
+      if (waitingForSecondOperand) {
+        displayValue = "0";
+        waitingForSecondOperand = false;
+      } else if (
+        displayValue.length <= 1 ||
+        (displayValue.length === 2 && displayValue.startsWith("-"))
+      ) {
+        displayValue = "0";
+      } else {
+        displayValue = displayValue.slice(0, -1);
+      }
+
+      updateDisplay();
+    }
+
+    function toggleSign() {
+      resetIfError();
+
+      if (waitingForSecondOperand && operator !== null) {
+        displayValue = "-0";
+        waitingForSecondOperand = false;
+      } else if (displayValue === "0") {
+        displayValue = "-0";
+      } else if (displayValue === "-0") {
+        displayValue = "0";
+      } else if (displayValue.startsWith("-")) {
+        displayValue = displayValue.slice(1);
+      } else {
+        displayValue = `-${displayValue}`;
+      }
+
+      updateDisplay();
+    }
+
+    function applyPercent() {
+      resetIfError();
+
+      displayValue = formatNumber(Number(displayValue) / 100);
+
+      if (waitingForSecondOperand && operator !== null) {
+        waitingForSecondOperand = false;
+      }
+
+      updateDisplay();
+    }
+
+    keysElement.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+
+      if (button.dataset.number !== undefined) {
+        inputDigit(button.dataset.number);
+        return;
+      }
+
+      if (button.dataset.operator) {
+        chooseOperator(button.dataset.operator);
+        return;
+      }
+
+      switch (button.dataset.action) {
+        case "clear":
+          clearCalculator();
+          break;
+        case "delete":
+          deleteLastDigit();
+          break;
+        case "decimal":
+          inputDecimal();
+          break;
+        case "equals":
+          handleEquals();
+          break;
+        case "sign":
+          toggleSign();
+          break;
+        case "percent":
+          applyPercent();
+          break;
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const key = event.key;
+
+      if (/^\d$/.test(key)) {
+        inputDigit(key);
+      } else if (key === "." || key === ",") {
+        inputDecimal();
+      } else if (["+", "-", "*", "/"].includes(key)) {
+        chooseOperator(key);
+      } else if (key === "Enter" || key === "=") {
+        event.preventDefault();
+        handleEquals();
+      } else if (key === "Backspace") {
+        event.preventDefault();
+        deleteLastDigit();
+      } else if (key === "Escape") {
+        clearCalculator();
+      } else if (key === "%") {
+        applyPercent();
+      } else if (key.toLowerCase() === "n") {
+        toggleSign();
+      }
+    });
+  </script>
+</body>
+</html>
